@@ -129,7 +129,6 @@ if __name__ == "__main__":
     templates_to_process = [
         "jingong.png",
         "sousuo.png",
-        "kobe.png",
         # 其他模板...
     ]
     
