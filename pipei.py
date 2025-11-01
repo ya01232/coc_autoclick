@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import uiautomator2 as u2
 import time
 import subprocess

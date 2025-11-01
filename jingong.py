@@ -1,10 +1,12 @@
+#!/usr/bin/env python3
+
 import uiautomator2 as u2
 import time
 import subprocess
 import sys
 for i in range(10):
     subprocess.run([sys.executable, "screenshot.py"], check=True)
-    subprocess.run([sys.executable, "jingong.py"], check=True)
+    subprocess.run([sys.executable, "pipei.py"], check=True)
 
     d=u2.connect("127.0.0.1:16384")
     d.swipe(900, 1800, 100, 200, 0.8)
