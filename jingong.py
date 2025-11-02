@@ -29,7 +29,6 @@ def adb_swipe(x1, y1, x2, y2, duration=0.8):
 
 for i in range(10):
     # 执行截图和匹配脚本
-    subprocess.run([sys.executable, "screenshot.py"], check=True)
     subprocess.run([sys.executable, "pipei.py"], check=True)
 
     # 滑动视角
@@ -51,7 +50,7 @@ for i in range(10):
     adb_click(670, 345)
     # 循环点击操作
     for j in range(8):
-        adb_click(260, 1300)
+        subprocess.run([sys.executable, "caoman.py"], check=True)
         adb_click(670, 345)
         adb_click(978, 170)
         adb_click(412, 584)
