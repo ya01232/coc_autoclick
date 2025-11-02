@@ -37,7 +37,7 @@ for i in range(10):
     adb_click(260, 1300)
 
     # 循环点击操作
-    for j in range(2):
+    for j in range(8):
         adb_click(670, 345)
         adb_click(978, 170)
         adb_click(412, 584)
@@ -45,11 +45,8 @@ for i in range(10):
         adb_click(1773, 304)
         adb_click(1833, 1091)
         adb_click(737, 1085)
-        print(f"第 {j+1}/10 次点击序列")
+        print(f"第 {j+1}/5 次点击序列")
         time.sleep(0.5)
-
-# 延迟后执行的点击操作
-time.sleep(60)
-adb_click(186, 1070)
-adb_click(1546, 919)
-adb_click(1283, 1230)
+    # 延迟后执行的点击操作
+    time.sleep(30)
+    subprocess.run([sys.executable, "huijia.py"], check=True)
