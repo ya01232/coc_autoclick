@@ -32,12 +32,26 @@ for i in range(10):
     subprocess.run([sys.executable, "screenshot.py"], check=True)
     subprocess.run([sys.executable, "pipei.py"], check=True)
 
-    # 滑动操作（使用ADB实现）
+    # 滑动视角
     adb_swipe(900, 1800, 100, 200, 0.8)
-    adb_click(260, 1300)
 
+    adb_click(450,1300)
+    adb_click(670, 345)
+    adb_click(700,1300)
+    adb_click(670, 345)
+    adb_click(900,1300)
+    adb_click(670, 345)
+    adb_click(1100,1300)
+    adb_click(670, 345)
+    adb_click(700,1300)
+    adb_click(670, 345)
+    adb_click(900,1300)
+    adb_click(670, 345)
+    adb_click(1100,1300)
+    adb_click(670, 345)
     # 循环点击操作
     for j in range(8):
+        adb_click(260, 1300)
         adb_click(670, 345)
         adb_click(978, 170)
         adb_click(412, 584)
@@ -45,8 +59,10 @@ for i in range(10):
         adb_click(1773, 304)
         adb_click(1833, 1091)
         adb_click(737, 1085)
-        print(f"第 {j+1}/5 次点击序列")
+        
+        
+        print(f"第 {j+1}/8 次点击序列")
         time.sleep(0.5)
     # 延迟后执行的点击操作
-    time.sleep(30)
+    time.sleep(60)
     subprocess.run([sys.executable, "huijia.py"], check=True)
