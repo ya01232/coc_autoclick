@@ -37,7 +37,7 @@ for i in range(10):
     adb_click(260, 1300)
 
     # 循环点击操作
-    for j in range(10):
+    for j in range(2):
         adb_click(670, 345)
         adb_click(978, 170)
         adb_click(412, 584)
