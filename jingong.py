@@ -109,7 +109,6 @@ def get_xy(img_model_path, retry=2):
 
 
 def process_templates(template_list, click_after_match=False):
-    """处理模板列表并执行相应操作"""
     result_dict = {}
     print(f"使用ADB连接设备：{DEVICE}，匹配阈值：{FIXED_THRESHOLD}")
     
@@ -128,7 +127,7 @@ def process_templates(template_list, click_after_match=False):
         if click_after_match and coord is not None:
             print(f"准备点击坐标：({GLOBAL_X}, {GLOBAL_Y})")
             adb_click(GLOBAL_X, GLOBAL_Y)
-            time.sleep(1.5)  # 等待界面响应
+            time.sleep(1)  # 等待界面响应
         elif not coord:
             print(f" 跳过 {template} 点击（无有效坐标）")
     
@@ -140,7 +139,7 @@ def process_caoman():
     return process_templates(templates, click_after_match=True)
 
 
-def process_jingong():
+def process_pipei():
     templates = ["jingong.png", "sousuo.png"]
     return process_templates(templates, click_after_match=True)
 
@@ -149,6 +148,29 @@ def process_huijia():
     templates = ["jieshu.png", "queding.png", "huiying.png"]
     return process_templates(templates, click_after_match=True)
 
+def process_nvhuang():
+    templates = ["nvhuang.png"]
+    return process_templates(templates, click_after_match=True)
+
+def process_manwang():
+    templates = ["manwang.png"]
+    return process_templates(templates, click_after_match=True)
+
+def process_yongwang():
+    templates = ["yongwang.png"]
+    return process_templates(templates, click_after_match=True)
+
+def process_runtu():
+    templates = ["runtu.png"]
+    return process_templates(templates, click_after_match=True)
+
+def process_cangying():
+    templates = ["cangying.png"]
+    return process_templates(templates, click_after_match=True)
+
+def process_feilong():
+    templates = ["feilong.png"]
+    return process_templates(templates, click_after_match=True)
 
 def main_loop():
     """主循环逻辑"""
@@ -156,25 +178,28 @@ def main_loop():
         print(f"\n===== 主循环第 {i+1}/10 轮 =====")
         
         # 执行匹配操作
-        process_jingong()
+        process_pipei()
         
         # 滑动视角
         adb_swipe(900, 1800, 100, 200, 0.8)
         
-        # 执行一系列点击操作
-        click_sequence = [
-            (450, 1300), (670, 345), (700, 1300), (670, 345),
-            (900, 1300), (670, 345), (1100, 1300), (670, 345),
-            (700, 1300), (670, 345), (900, 1300), (670, 345),
-            (1100, 1300), (670, 345)
-        ]
-        
-        for x, y in click_sequence:
-            adb_click(x, y)
+        #下王
+        process_nvhuang()
+        adb_click(670,345)
+        process_manwang()
+        adb_click(670,345)
+        process_yongwang()
+        adb_click(670,345)
+        process_runtu()
+        adb_click(670,345)
+        process_cangying()
+        adb_click(670,345)
+
         
         # 循环点击操作
         for j in range(8):
             process_caoman()
+            process_feilong()
             inner_clicks = [
                 (670, 345), (978, 170), (412, 584), (1519, 112),
                 (1773, 304), (1833, 1091), (737, 1085)
@@ -185,7 +210,7 @@ def main_loop():
             time.sleep(0.5)
         
         # 延迟后执行回家操作
-        time.sleep(60)
+        time.sleep(30)
         process_huijia()
         time.sleep(5)
 
