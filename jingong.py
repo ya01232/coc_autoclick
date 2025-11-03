@@ -3,65 +3,193 @@
 import time
 import subprocess
 import sys
+import os
+import cv2
 
-# 目标设备序列号
+# 全局配置
+GLOBAL_X = None
+GLOBAL_Y = None
 DEVICE = "127.0.0.1:16384"
+FIXED_THRESHOLD = 0.25
+SCREENSHOT_PATH = "./screenshot.png"
+UI_TEMPLATE_DIR = "./ui/"
+
 
 def adb_click(x, y):
     """通过ADB执行点击操作"""
-    subprocess.run(
-        ["adb", "-s", DEVICE, "shell", f"input tap {x} {y}"],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
+    try:
+        subprocess.run(
+            ["adb", "-s", DEVICE, "shell", f"input tap {x} {y}"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        print(f"ADB点击成功：({x}, {y})")
+    except subprocess.CalledProcessError as e:
+        print(f"ADB点击失败：{e}")
+
 
 def adb_swipe(x1, y1, x2, y2, duration=0.8):
     """通过ADB执行滑动操作（duration单位：秒）"""
-    # ADB滑动命令的duration单位是毫秒
     duration_ms = int(duration * 1000)
-    subprocess.run(
-        ["adb", "-s", DEVICE, "shell", f"input swipe {x1} {y1} {x2} {y2} {duration_ms}"],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
+    try:
+        subprocess.run(
+            ["adb", "-s", DEVICE, "shell", f"input swipe {x1} {y1} {x2} {y2} {duration_ms}"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        print(f"ADB滑动成功：({x1},{y1}) -> ({x2},{y2}) 耗时{duration}秒")
+    except subprocess.CalledProcessError as e:
+        print(f"ADB滑动失败：{e}")
 
-for i in range(10):
-    # 执行截图和匹配脚本
-    subprocess.run([sys.executable, "pipei.py"], check=True)
 
-    # 滑动视角
-    adb_swipe(900, 1800, 100, 200, 0.8)
+def take_screenshot():
+    """执行截图脚本并处理错误"""
+    try:
+        subprocess.run([sys.executable, "screenshot.py"], check=True)
+        print("截图成功")
+        time.sleep(0.5)  # 确保文件写入完成
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"截图失败：{e}")
+        return False
+    except FileNotFoundError:
+        print("未找到screenshot.py脚本")
+        return False
 
-    adb_click(450,1300)
-    adb_click(670, 345)
-    adb_click(700,1300)
-    adb_click(670, 345)
-    adb_click(900,1300)
-    adb_click(670, 345)
-    adb_click(1100,1300)
-    adb_click(670, 345)
-    adb_click(700,1300)
-    adb_click(670, 345)
-    adb_click(900,1300)
-    adb_click(670, 345)
-    adb_click(1100,1300)
-    adb_click(670, 345)
-    # 循环点击操作
-    for j in range(8):
-        subprocess.run([sys.executable, "caoman.py"], check=True)
-        adb_click(670, 345)
-        adb_click(978, 170)
-        adb_click(412, 584)
-        adb_click(1519, 112)
-        adb_click(1773, 304)
-        adb_click(1833, 1091)
-        adb_click(737, 1085)
+
+def get_xy(img_model_path, retry=2):
+    """匹配模板并支持重试机制"""
+    global GLOBAL_X, GLOBAL_Y
+    full_model_path = os.path.join(UI_TEMPLATE_DIR, img_model_path)
+    
+    # 检查模板文件是否存在
+    if not os.path.exists(full_model_path):
+        print(f"模板文件不存在：{full_model_path}")
+        GLOBAL_X, GLOBAL_Y = None, None
+        return None
+    
+    # 读取模板
+    img_model = cv2.imread(full_model_path)
+    if img_model is None:
+        print(f"无法读取模板：{full_model_path}")
+        GLOBAL_X, GLOBAL_Y = None, None
+        return None
+    model_h, model_w = img_model.shape[:2]
+
+    # 支持重试机制
+    for attempt in range(retry + 1):
+        # 读取原始图像（每次重试重新读取）
+        img = cv2.imread(SCREENSHOT_PATH)
+        if img is None:
+            print(f"无法读取截图 {SCREENSHOT_PATH}（尝试 {attempt + 1}/{retry + 1}）")
+            time.sleep(0.5)
+            continue
+
+        # 模板匹配
+        result = cv2.matchTemplate(img, img_model, cv2.TM_SQDIFF_NORMED)
+        min_val, _, min_loc, _ = cv2.minMaxLoc(result)
+
+        # 判断是否匹配成功
+        if min_val <= FIXED_THRESHOLD:
+            GLOBAL_X = int(min_loc[0] + model_w / 2)
+            GLOBAL_Y = int(min_loc[1] + model_h / 2)
+            print(f"{img_model_path} 匹配成功（尝试 {attempt + 1}）：坐标 ({GLOBAL_X}, {GLOBAL_Y})，匹配值 {min_val:.4f}")
+            return (GLOBAL_X, GLOBAL_Y)
+        else:
+            print(f"{img_model_path} 匹配失败（尝试 {attempt + 1}）：匹配值 {min_val:.4f} > 阈值 {FIXED_THRESHOLD}")
+            if attempt < retry:
+                time.sleep(0.5)
+
+    # 所有重试都失败
+    print(f"{img_model_path} 所有尝试均失败")
+    GLOBAL_X, GLOBAL_Y = None, None
+    return None
+
+
+def process_templates(template_list, click_after_match=False):
+    """处理模板列表并执行相应操作"""
+    result_dict = {}
+    print(f"使用ADB连接设备：{DEVICE}，匹配阈值：{FIXED_THRESHOLD}")
+    
+    for template in template_list:
+        print(f"\n===== 处理模板：{template} =====")
+        # 1. 截图
+        if not take_screenshot():
+            result_dict[template] = None
+            continue
         
+        # 2. 模板匹配（支持重试）
+        coord = get_xy(template, retry=1)
+        result_dict[template] = coord
         
-        print(f"第 {j+1}/8 次点击序列")
-        time.sleep(0.5)
-    # 延迟后执行的点击操作
-    time.sleep(60)
-    subprocess.run([sys.executable, "huijia.py"], check=True)
+        # 3. 点击（如果需要）
+        if click_after_match and coord is not None:
+            print(f"准备点击坐标：({GLOBAL_X}, {GLOBAL_Y})")
+            adb_click(GLOBAL_X, GLOBAL_Y)
+            time.sleep(1.5)  # 等待界面响应
+        elif not coord:
+            print(f" 跳过 {template} 点击（无有效坐标）")
+    
+    return result_dict
+
+
+def process_caoman():
+    templates = ["caoman.png"]
+    return process_templates(templates, click_after_match=True)
+
+
+def process_jingong():
+    templates = ["jingong.png", "sousuo.png"]
+    return process_templates(templates, click_after_match=True)
+
+
+def process_huijia():
+    templates = ["jieshu.png", "queding.png", "huiying.png"]
+    return process_templates(templates, click_after_match=True)
+
+
+def main_loop():
+    """主循环逻辑"""
+    for i in range(10):
+        print(f"\n===== 主循环第 {i+1}/10 轮 =====")
+        
+        # 执行匹配操作
+        process_jingong()
+        
+        # 滑动视角
+        adb_swipe(900, 1800, 100, 200, 0.8)
+        
+        # 执行一系列点击操作
+        click_sequence = [
+            (450, 1300), (670, 345), (700, 1300), (670, 345),
+            (900, 1300), (670, 345), (1100, 1300), (670, 345),
+            (700, 1300), (670, 345), (900, 1300), (670, 345),
+            (1100, 1300), (670, 345)
+        ]
+        
+        for x, y in click_sequence:
+            adb_click(x, y)
+        
+        # 循环点击操作
+        for j in range(8):
+            process_caoman()
+            inner_clicks = [
+                (670, 345), (978, 170), (412, 584), (1519, 112),
+                (1773, 304), (1833, 1091), (737, 1085)
+            ]
+            for x, y in inner_clicks:
+                adb_click(x, y)
+            print(f"第 {j+1}/8 次点击序列")
+            time.sleep(0.5)
+        
+        # 延迟后执行回家操作
+        time.sleep(60)
+        process_huijia()
+        time.sleep(5)
+
+
+if __name__ == "__main__":
+    main_loop()
+    print("\n所有操作执行完毕")
