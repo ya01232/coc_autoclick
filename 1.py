@@ -178,23 +178,28 @@ def process_leidian():
 
 def process_tianniao():
     templates = ["tianniao.png"]
-    return process_templates(templates, click_after_match=True)
+    # 只返回坐标不自动点击
+    return process_templates(templates, click_after_match=False)
 
 def main_loop():
     """主循环逻辑"""
-    for i in range(10):
-        print(f"\n===== 主循环第 {i+1}/10 轮 =====")
+    for i in range(999):
+        print(f"\n===== 主循环第 {i+1} 轮 =====")
         
         # 执行匹配操作
         process_pipei()
         
-        # 滑动视角
-        adb_swipe(900, 1800, 100, 200, 0.8)
-        
         #电鸟炮
         process_leidian()
-        for j in range(11):
-            process_tianniao()
+        tianniao_result = process_tianniao()
+        tianniao_coord = tianniao_result.get("tianniao.png")
+        if tianniao_coord:
+            for j in range(11):
+                print(f"第 {j+1}/11 次点击tianniao")
+                adb_click(*tianniao_coord)
+                time.sleep(0.5)  # 每次点击间隔
+        else:
+            print("未找到tianniao，跳过点击")
             
         #下王
         process_nvhuang()
