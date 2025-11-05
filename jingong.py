@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
-
 import time
 import subprocess
 import sys
 import os
 import cv2
 
-# 全局配置
+# 全局配置：从环境变量读取设备和阈值，无则用默认值
 GLOBAL_X = None
 GLOBAL_Y = None
-DEVICE = "127.0.0.1:16384"
-FIXED_THRESHOLD = 0.25
+DEVICE = os.getenv("COC_DEVICE", "127.0.0.1:16384")
+FIXED_THRESHOLD = float(os.getenv("COC_THRESHOLD", "0.25"))
 SCREENSHOT_PATH = "./screenshot.png"
 UI_TEMPLATE_DIR = "./ui/"
-
 
 def adb_click(x, y):
     """通过ADB执行点击操作"""
@@ -27,7 +25,6 @@ def adb_click(x, y):
         print(f"ADB点击成功：({x}, {y})")
     except subprocess.CalledProcessError as e:
         print(f"ADB点击失败：{e}")
-
 
 def adb_swipe(x1, y1, x2, y2, duration=0.8):
     """通过ADB执行滑动操作（duration单位：秒）"""
@@ -43,11 +40,14 @@ def adb_swipe(x1, y1, x2, y2, duration=0.8):
     except subprocess.CalledProcessError as e:
         print(f"ADB滑动失败：{e}")
 
-
 def take_screenshot():
-    """执行截图脚本并处理错误"""
+    """执行截图脚本并处理错误（传递选中的设备）"""
     try:
-        subprocess.run([sys.executable, "screenshot.py"], check=True)
+        # 传递设备参数给截图脚本
+        subprocess.run(
+            [sys.executable, "screenshot.py", DEVICE],
+            check=True
+        )
         print("截图成功")
         time.sleep(0.5)  # 确保文件写入完成
         return True
@@ -57,7 +57,6 @@ def take_screenshot():
     except FileNotFoundError:
         print("未找到screenshot.py脚本")
         return False
-
 
 def get_xy(img_model_path, retry=2):
     """匹配模板并支持重试机制"""
@@ -77,7 +76,7 @@ def get_xy(img_model_path, retry=2):
         GLOBAL_X, GLOBAL_Y = None, None
         return None
     model_h, model_w = img_model.shape[:2]
-
+    
     # 支持重试机制
     for attempt in range(retry + 1):
         # 读取原始图像（每次重试重新读取）
@@ -86,11 +85,11 @@ def get_xy(img_model_path, retry=2):
             print(f"无法读取截图 {SCREENSHOT_PATH}（尝试 {attempt + 1}/{retry + 1}）")
             time.sleep(0.5)
             continue
-
+        
         # 模板匹配
         result = cv2.matchTemplate(img, img_model, cv2.TM_SQDIFF_NORMED)
         min_val, _, min_loc, _ = cv2.minMaxLoc(result)
-
+        
         # 判断是否匹配成功
         if min_val <= FIXED_THRESHOLD:
             GLOBAL_X = int(min_loc[0] + model_w / 2)
@@ -101,12 +100,11 @@ def get_xy(img_model_path, retry=2):
             print(f"{img_model_path} 匹配失败（尝试 {attempt + 1}）：匹配值 {min_val:.4f} > 阈值 {FIXED_THRESHOLD}")
             if attempt < retry:
                 time.sleep(0.5)
-
+    
     # 所有重试都失败
     print(f"{img_model_path} 所有尝试均失败")
     GLOBAL_X, GLOBAL_Y = None, None
     return None
-
 
 def process_templates(template_list, click_after_match=False):
     result_dict = {}
@@ -133,16 +131,13 @@ def process_templates(template_list, click_after_match=False):
     
     return result_dict
 
-
 def process_caoman():
     templates = ["caoman.png"]
     return process_templates(templates, click_after_match=True)
 
-
 def process_pipei():
     templates = ["jingong.png", "sousuo.png"]
     return process_templates(templates, click_after_match=True)
-
 
 def process_huijia():
     templates = ["jieshu.png", "queding.png", "huiying.png"]
@@ -188,10 +183,9 @@ def main_loop():
         # 执行匹配操作
         process_pipei()
         time.sleep(5)
-
-        #电鸟炮
+        
+        # 电鸟炮
         process_leidian()
-
         tianniao_result = process_tianniao()
         tianniao_coord = tianniao_result.get("tianniao.png")
         if tianniao_coord:
@@ -202,7 +196,7 @@ def main_loop():
         else:
             print("未找到天鸟，跳过点击")
             
-        #下王
+        # 下王
         process_nvhuang()
         adb_click(670,345)
         process_manwang()
@@ -213,12 +207,11 @@ def main_loop():
         adb_click(670,345)
         process_cangying()
         adb_click(670,345)
-
         
         # 循环点击操作
         for j in range(8):
             process_caoman()
-            #process_feilong()
+            # process_feilong()
             inner_clicks = [
                 (670, 345), (978, 170), (412, 584), (1519, 112),
                 (1773, 304), (1833, 1091), (737, 1085)
@@ -232,7 +225,6 @@ def main_loop():
         time.sleep(30)
         process_huijia()
         time.sleep(5)
-
 
 if __name__ == "__main__":
     main_loop()

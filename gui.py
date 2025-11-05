@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, messagebox, scrolledtext, simpledialog
 import subprocess
 import sys
 import threading
@@ -10,7 +10,7 @@ class CocAutoClickGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("部落冲突自动化脚本")
-        self.root.geometry("600x500")
+        self.root.geometry("650x550")
         self.root.resizable(True, True)
         
         # 确保中文显示正常
@@ -32,11 +32,23 @@ class CocAutoClickGUI:
         device_frame = ttk.LabelFrame(main_frame, text="设备配置", padding="10")
         device_frame.pack(fill=tk.X, pady=5)
         
-        ttk.Label(device_frame, text="设备地址:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.device_entry = ttk.Entry(device_frame, width=30)
-        self.device_entry.grid(row=0, column=1, sticky=tk.W, pady=5)
-        self.device_entry.insert(0, "127.0.0.1:16384")  # 默认设备地址
+        # 设备选择行
+        ttk.Label(device_frame, text="设备选择:").grid(row=0, column=0, sticky=tk.W, pady=5)
         
+        # 设备下拉选择框
+        self.device_var = tk.StringVar()
+        self.device_combobox = ttk.Combobox(device_frame, textvariable=self.device_var, width=30)
+        self.device_combobox.grid(row=0, column=1, sticky=tk.W, pady=5, padx=(0, 10))
+        
+        # 刷新设备列表按钮
+        self.refresh_device_btn = ttk.Button(device_frame, text="刷新设备列表", command=self.refresh_device_list)
+        self.refresh_device_btn.grid(row=0, column=2, sticky=tk.W, pady=5)
+        
+        # 连接设备按钮
+        self.adb_connect_btn = ttk.Button(device_frame, text="连接指定设备", command=self.connect_specified_device)
+        self.adb_connect_btn.grid(row=0, column=3, sticky=tk.W, pady=5)
+        
+        # 匹配阈值行
         ttk.Label(device_frame, text="匹配阈值:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.threshold_entry = ttk.Entry(device_frame, width=10)
         self.threshold_entry.grid(row=1, column=1, sticky=tk.W, pady=5)
@@ -48,7 +60,7 @@ class CocAutoClickGUI:
         
         self.script_var = tk.IntVar(value=1)
         ttk.Radiobutton(script_frame, text="进攻脚本", variable=self.script_var, value=1).pack(anchor=tk.W, pady=2)
-        ttk.Radiobutton(script_frame, text="匹配脚本", variable=self.script_var, value=2).pack(anchor=tk.W, pady=2)
+        ttk.Radiobutton(script_frame, text="奶号脚本", variable=self.script_var, value=2).pack(anchor=tk.W, pady=2)
         
         # 操作按钮区域
         btn_frame = ttk.Frame(main_frame, padding="10")
@@ -59,9 +71,6 @@ class CocAutoClickGUI:
         
         self.stop_btn = ttk.Button(btn_frame, text="停止运行", command=self.stop_script, state=tk.DISABLED)
         self.stop_btn.pack(side=tk.LEFT, padx=5)
-        
-        self.adb_connect_btn = ttk.Button(btn_frame, text="连接设备", command=self.connect_device)
-        self.adb_connect_btn.pack(side=tk.LEFT, padx=5)
         
         # 日志显示区域
         log_frame = ttk.LabelFrame(main_frame, text="运行日志", padding="10")
@@ -76,6 +85,9 @@ class CocAutoClickGUI:
         status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
         
+        # 初始刷新设备列表
+        self.refresh_device_list()
+        
     def log(self, message):
         """添加日志信息"""
         self.log_text.config(state=tk.NORMAL)
@@ -86,14 +98,52 @@ class CocAutoClickGUI:
     def update_status(self, status):
         """更新状态条"""
         self.status_var.set(status)
+    
+    def refresh_device_list(self):
+        """刷新已连接的ADB设备列表"""
+        self.log("正在刷新设备列表...")
+        self.update_status("正在刷新设备列表...")
         
-    def connect_device(self):
-        """连接ADB设备"""
-        device = self.device_entry.get().strip()
-        if not device:
-            messagebox.showerror("错误", "请输入设备地址")
-            return
+        try:
+            # 执行ADB设备命令
+            result = subprocess.run(
+                ["adb", "devices"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
             
+            # 解析输出，提取设备列表
+            devices = []
+            lines = result.stdout.strip().split('\n')[1:]  # 跳过第一行标题
+            
+            for line in lines:
+                if line.strip() and 'device' in line:
+                    device = line.split()[0].strip()
+                    devices.append(device)
+            
+            # 更新下拉框
+            self.device_combobox['values'] = devices
+            if devices:
+                self.device_combobox.current(0)  # 选中第一个设备
+                self.log(f"找到 {len(devices)} 个已连接设备")
+                self.update_status(f"找到 {len(devices)} 个设备")
+            else:
+                self.log("未找到已连接的设备")
+                self.update_status("未找到设备")
+        except Exception as e:
+            self.log(f"刷新设备列表时出错: {str(e)}")
+            self.update_status("刷新设备列表出错")
+    
+    def connect_specified_device(self):
+        """连接用户指定的设备地址"""
+        device = self.device_var.get().strip()
+        if not device:
+            # 如果下拉框中没有设备，提示用户输入
+            device = simpledialog.askstring("输入设备地址", "请输入设备地址 (例如: 127.0.0.1:16384)")
+            if not device:
+                return
+                
         self.log(f"尝试连接设备: {device}")
         self.update_status("正在连接设备...")
         
@@ -106,29 +156,14 @@ class CocAutoClickGUI:
                 timeout=10
             )
             
-            if "connected to" in result.stdout:
+            if "connected to" in result.stdout or "already connected" in result.stdout:
                 self.log(f"设备连接成功: {device}")
-                self.log("正在初始化uiautomator2...")
-                
-                # 初始化uiautomator2
-                init_result = subprocess.run(
-                    [sys.executable, "-m", "uiautomator2", "init"],
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-                
-                if init_result.returncode == 0:
-                    self.log("uiautomator2初始化成功")
-                    self.log("请确认模拟器中已出现ATX应用")
-                    self.update_status("设备已连接")
-                else:
-                    self.log(f"uiautomator2初始化失败: {init_result.stderr}")
-                    self.update_status("初始化失败")
+                self.update_status("设备已连接")
+                # 刷新设备列表
+                self.refresh_device_list()
             else:
-                self.log(f"设备连接失败: {result.stderr}")
+                self.log(f"设备连接失败: {result.stdout.strip() or result.stderr.strip()}")
                 self.update_status("连接失败")
-                
         except Exception as e:
             self.log(f"连接设备时出错: {str(e)}")
             self.update_status("连接出错")
@@ -140,12 +175,12 @@ class CocAutoClickGUI:
             return
             
         script_id = self.script_var.get()
-        device = self.device_entry.get().strip()
+        device = self.device_var.get().strip()
         threshold = self.threshold_entry.get().strip()
         
         # 验证输入
         if not device:
-            messagebox.showerror("错误", "请输入设备地址")
+            messagebox.showerror("错误", "请选择或连接设备")
             return
             
         try:
@@ -155,7 +190,7 @@ class CocAutoClickGUI:
             return
             
         # 确定要运行的脚本
-        script_file = "jingong.py" if script_id == 1 else "1.py"
+        script_file = "jingong.py" if script_id == 1 else "naihao.py"
         
         # 检查脚本文件是否存在
         if not os.path.exists(script_file):
