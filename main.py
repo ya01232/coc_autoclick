@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 
-a=input("选择脚本：...1-进攻 2-匹配")
+a=input("选择脚本：...1-进攻 2-")
 
 if a=="1":
     subprocess.run([sys.executable, "jingong.py"], check=True)

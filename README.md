@@ -10,8 +10,6 @@
 
 请确保你已经安装以下python库
 
-uiautomator2
-
 opencv2
 
 numpy
@@ -25,9 +23,4 @@ numpy
 2. **设置模拟器**
 在模拟器的设置中找到开发者选项，打开其下的“USB调试”
 
-3. **初始化uiautomator2**
-在cmd中输入adb connect 127.0.0.1:16384
 
-然后输入python -m uiautomator2 init
-
-等待运行，如果在模拟器中看到名为“ATX”的图标为小车的应用，则初始化完成

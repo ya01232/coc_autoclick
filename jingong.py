@@ -178,7 +178,6 @@ def process_leidian():
 
 def process_tianniao():
     templates = ["tianniao.png"]
-    # 只返回坐标不自动点击
     return process_templates(templates, click_after_match=False)
 
 def main_loop():
@@ -188,9 +187,11 @@ def main_loop():
         
         # 执行匹配操作
         process_pipei()
-        
+        time.sleep(5)
+
         #电鸟炮
         process_leidian()
+
         tianniao_result = process_tianniao()
         tianniao_coord = tianniao_result.get("tianniao.png")
         if tianniao_coord:
@@ -199,7 +200,7 @@ def main_loop():
                 adb_click(*tianniao_coord)
                 time.sleep(0.5)  # 每次点击间隔
         else:
-            print("未找到tianniao，跳过点击")
+            print("未找到天鸟，跳过点击")
             
         #下王
         process_nvhuang()
