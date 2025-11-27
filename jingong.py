@@ -5,7 +5,7 @@ import sys
 import os
 import cv2
 
-# 全局配置：从环境变量读取设备和阈值，无则用默认值
+# 全局配置：从环境变量读取设备和阈值
 GLOBAL_X = None
 GLOBAL_Y = None
 DEVICE = os.getenv("COC_DEVICE", "127.0.0.1:16384")
@@ -13,8 +13,12 @@ FIXED_THRESHOLD = float(os.getenv("COC_THRESHOLD", "0.25"))
 SCREENSHOT_PATH = "./screenshot.png"
 UI_TEMPLATE_DIR = "./ui/"
 
+
+#连接设备
+subprocess.run(["adb", "connect", DEVICE])
+
+#通过ADB执行点击操作
 def adb_click(x, y):
-    """通过ADB执行点击操作"""
     try:
         subprocess.run(
             ["adb", "-s", DEVICE, "shell", f"input tap {x} {y}"],
@@ -26,8 +30,8 @@ def adb_click(x, y):
     except subprocess.CalledProcessError as e:
         print(f"ADB点击失败：{e}")
 
+#通过ADB执行滑动操作（duration单位：秒）
 def adb_swipe(x1, y1, x2, y2, duration=0.8):
-    """通过ADB执行滑动操作（duration单位：秒）"""
     duration_ms = int(duration * 1000)
     try:
         subprocess.run(
@@ -40,10 +44,9 @@ def adb_swipe(x1, y1, x2, y2, duration=0.8):
     except subprocess.CalledProcessError as e:
         print(f"ADB滑动失败：{e}")
 
+#执行截图脚本并处理错误
 def take_screenshot():
-    """执行截图脚本并处理错误（传递选中的设备）"""
     try:
-        # 传递设备参数给截图脚本
         subprocess.run(
             [sys.executable, "screenshot.py", DEVICE],
             check=True
@@ -136,7 +139,7 @@ def process_caoman():
     return process_templates(templates, click_after_match=True)
 
 def process_pipei():
-    templates = ["jingong.png", "sousuo.png"]
+    templates = ["jingong.png", "sousuo.png", "jingong2.png"]
     return process_templates(templates, click_after_match=True)
 
 def process_huijia():
@@ -171,12 +174,17 @@ def process_leidian():
     templates = ["leidian.png"]
     return process_templates(templates, click_after_match=True)
 
+def process_caoge():
+    templates = ["caoge.png"]
+    return process_templates(templates, click_after_match=True)
+
 def process_tianniao():
     templates = ["tianniao.png"]
     return process_templates(templates, click_after_match=False)
 
+
+#主进攻逻辑
 def main_loop():
-    """主循环逻辑"""
     for i in range(999):
         print(f"\n===== 主循环第 {i+1} 轮 =====")
         
@@ -184,45 +192,48 @@ def main_loop():
         process_pipei()
         time.sleep(5)
         
+        #版本更新后我觉得没必要下王了，直接下超哥就行
+
+
         # 电鸟炮
-        process_leidian()
-        tianniao_result = process_tianniao()
-        tianniao_coord = tianniao_result.get("tianniao.png")
-        if tianniao_coord:
-            for j in range(11):
-                print(f"第 {j+1}/11 次点击tianniao")
-                adb_click(*tianniao_coord)
-                time.sleep(0.5)  # 每次点击间隔
-        else:
-            print("未找到天鸟，跳过点击")
-            
+        #process_leidian()
+        #tianniao_result = process_tianniao()
+        #tianniao_coord = tianniao_result.get("tianniao.png")
+        #if tianniao_coord:
+        #    for j in range(11):
+        #        print(f"第 {j+1}/11 次点击tianniao")
+        #        adb_click(*tianniao_coord)
+        #        time.sleep(0.5)  # 每次点击间隔
+        #else:
+        #    print("未找到天鸟，跳过点击")
         # 下王
-        process_nvhuang()
-        adb_click(670,345)
-        process_manwang()
-        adb_click(670,345)
-        process_yongwang()
-        adb_click(670,345)
-        process_runtu()
-        adb_click(670,345)
-        process_cangying()
-        adb_click(670,345)
+        #process_nvhuang()
+        #adb_click(670,345)
+        #process_manwang()
+        #adb_click(670,345)
+        #process_yongwang()
+        #adb_click(670,345)
+        #process_runtu()
+        #adb_click(670,345)
+        #process_cangying()
+        #adb_click(670,345)
         
+
         # 循环点击操作
-        for j in range(8):
-            process_caoman()
+        for j in range(10):
+            # process_caoman()
             # process_feilong()
+            process_caoge()
             inner_clicks = [
-                (670, 345), (978, 170), (412, 584), (1519, 112),
-                (1773, 304), (1833, 1091), (737, 1085)
+                (690, 350), (460, 530),(1520, 530),(690, 710),(1520, 710),(2000,915)
             ]
             for x, y in inner_clicks:
                 adb_click(x, y)
             print(f"第 {j+1}/8 次点击序列")
-            time.sleep(0.5)
+            time.sleep(0.1)  # 每次点击间隔
         
         # 延迟后执行回家操作
-        time.sleep(30)
+        time.sleep(15)
         process_huijia()
         time.sleep(5)
 
