@@ -225,7 +225,7 @@ def main_loop():
             # process_feilong()
             process_caoge()
             inner_clicks = [
-                (690, 350), (460, 530),(1520, 530),(690, 710),(1520, 710),(2000,915)
+                (690, 350), (460, 530),(1520, 530),(690, 710),(1520, 710),(2000,915),(1592,192)
             ]
             for x, y in inner_clicks:
                 adb_click(x, y)
@@ -233,9 +233,9 @@ def main_loop():
             time.sleep(0.1)  # 每次点击间隔
         
         # 延迟后执行回家操作
-        time.sleep(15)
-        process_huijia()
         time.sleep(5)
+        process_huijia()
+        time.sleep(2)
 
 if __name__ == "__main__":
     main_loop()
