@@ -7,6 +7,10 @@ import threading
 import os
 import time
 
+DEVICE = os.getenv("COC_DEVICE", "127.0.0.1:16384")
+subprocess.run(["adb", "connect", DEVICE])
+
+
 class CocAutoClickGUI:
     def __init__(self, root):
         self.root = root

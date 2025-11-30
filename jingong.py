@@ -164,7 +164,7 @@ def process_runtu():
 
 def process_cangying():
     templates = ["cangying.png"]
-    return process_templates(templates, click_after_match=True)
+    return process_templates
 
 def process_feilong():
     templates = ["feilong.png"]
