@@ -6,290 +6,336 @@ import sys
 import threading
 import os
 import time
-
-DEVICE = os.getenv("COC_DEVICE", "127.0.0.1:16384")
-subprocess.run(["adb", "connect", DEVICE])
+import re
 
 
-class CocAutoClickGUI:
+class CocAutoLauncher:
+    SCRIPTS = [
+        {"id": 1, "name": "进攻脚本", "file": "jingong.py"},
+        {"id": 2, "name": "奶号脚本", "file": "naihao.py"},
+        {"id": 3, "name": "欢迎脚本", "file": "huanying.py"},
+    ]
+
     def __init__(self, root):
         self.root = root
-        self.root.title("部落冲突自动化脚本")
-        self.root.geometry("650x550")
-        self.root.resizable(True, True)
-        
-        # 确保中文显示正常
-        self.style = ttk.Style()
-        
-        # 脚本运行状态
+        self.root.title("部落冲突自动化脚本启动器")
+        self.root.geometry("700x580")
+        self.root.minsize(600, 500)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
         self.running = False
         self.process = None
-        
-        # 创建界面组件
+        self.current_script_id = None
+
         self.create_widgets()
-        
+        self.refresh_device_list()
+
     def create_widgets(self):
-        # 主框架
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         # 设备配置区域
         device_frame = ttk.LabelFrame(main_frame, text="设备配置", padding="10")
-        device_frame.pack(fill=tk.X, pady=5)
-        
+        device_frame.pack(fill=tk.X, pady=(0, 8))
+
         # 设备选择行
-        ttk.Label(device_frame, text="设备选择:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        
-        # 设备下拉选择框
+        row1 = ttk.Frame(device_frame)
+        row1.pack(fill=tk.X, pady=3)
+        ttk.Label(row1, text="设备地址:").pack(side=tk.LEFT)
         self.device_var = tk.StringVar()
-        self.device_combobox = ttk.Combobox(device_frame, textvariable=self.device_var, width=30)
-        self.device_combobox.grid(row=0, column=1, sticky=tk.W, pady=5, padx=(0, 10))
-        
-        # 刷新设备列表按钮
-        self.refresh_device_btn = ttk.Button(device_frame, text="刷新设备列表", command=self.refresh_device_list)
-        self.refresh_device_btn.grid(row=0, column=2, sticky=tk.W, pady=5)
-        
-        # 连接设备按钮
-        self.adb_connect_btn = ttk.Button(device_frame, text="连接指定设备", command=self.connect_specified_device)
-        self.adb_connect_btn.grid(row=0, column=3, sticky=tk.W, pady=5)
-        
-        # 匹配阈值行
-        ttk.Label(device_frame, text="匹配阈值:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.threshold_entry = ttk.Entry(device_frame, width=10)
-        self.threshold_entry.grid(row=1, column=1, sticky=tk.W, pady=5)
-        self.threshold_entry.insert(0, "0.25")  # 默认阈值
-        
+        self.device_combobox = ttk.Combobox(
+            row1,
+            textvariable=self.device_var,
+            width=35,
+            state="readonly"
+        )
+        self.device_combobox.pack(side=tk.LEFT, padx=(5, 10))
+
+        ttk.Button(row1, text="刷新列表", command=self.refresh_device_list, width=10).pack(side=tk.LEFT)
+        ttk.Button(row1, text="连接设备", command=self.connect_specified_device, width=10).pack(side=tk.LEFT, padx=(5, 0))
+
+        # 参数行
+        row2 = ttk.Frame(device_frame)
+        row2.pack(fill=tk.X, pady=5)
+        ttk.Label(row2, text="匹配阈值:").pack(side=tk.LEFT)
+        self.threshold_var = tk.StringVar(value="0.25")
+        ttk.Entry(row2, textvariable=self.threshold_var, width=8).pack(side=tk.LEFT, padx=(5, 20))
+
+        ttk.Label(row2, text="循环次数 (0=无限):").pack(side=tk.LEFT)
+        self.loop_count_var = tk.StringVar(value="0")
+        ttk.Entry(row2, textvariable=self.loop_count_var, width=6).pack(side=tk.LEFT, padx=(5, 0))
+
         # 脚本选择区域
         script_frame = ttk.LabelFrame(main_frame, text="脚本选择", padding="10")
-        script_frame.pack(fill=tk.X, pady=5)
-        
+        script_frame.pack(fill=tk.X, pady=(0, 8))
+
         self.script_var = tk.IntVar(value=1)
-        ttk.Radiobutton(script_frame, text="进攻脚本", variable=self.script_var, value=1).pack(anchor=tk.W, pady=2)
-        ttk.Radiobutton(script_frame, text="奶号脚本", variable=self.script_var, value=2).pack(anchor=tk.W, pady=2)
-        
-        # 操作按钮区域
-        btn_frame = ttk.Frame(main_frame, padding="10")
-        btn_frame.pack(fill=tk.X, pady=5)
-        
-        self.start_btn = ttk.Button(btn_frame, text="开始运行", command=self.start_script)
-        self.start_btn.pack(side=tk.LEFT, padx=5)
-        
-        self.stop_btn = ttk.Button(btn_frame, text="停止运行", command=self.stop_script, state=tk.DISABLED)
-        self.stop_btn.pack(side=tk.LEFT, padx=5)
-        
-        # 日志显示区域
-        log_frame = ttk.LabelFrame(main_frame, text="运行日志", padding="10")
-        log_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-        
-        self.log_text = scrolledtext.ScrolledText(log_frame, wrap=tk.WORD, height=15)
+        for script in self.SCRIPTS:
+            ttk.Radiobutton(
+                script_frame,
+                text=script["name"],
+                variable=self.script_var,
+                value=script["id"]
+            ).pack(anchor=tk.W, pady=2)
+
+        # 控制按钮
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.pack(fill=tk.X, pady=(0, 8))
+
+        self.start_btn = ttk.Button(btn_frame, text="开始运行", command=self.start_script, width=12)
+        self.start_btn.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.stop_btn = ttk.Button(btn_frame, text="停止运行", command=self.stop_script, state=tk.DISABLED, width=12)
+        self.stop_btn.pack(side=tk.LEFT)
+
+        # 日志区域
+        log_frame = ttk.LabelFrame(main_frame, text="运行日志", padding="5")
+        log_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.log_text = scrolledtext.ScrolledText(
+            log_frame,
+            wrap=tk.WORD,
+            state=tk.DISABLED
+        )
         self.log_text.pack(fill=tk.BOTH, expand=True)
-        self.log_text.config(state=tk.DISABLED)
-        
-        # 状态条
+
+        # 状态栏
         self.status_var = tk.StringVar(value="就绪")
         status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-        
-        # 初始刷新设备列表
-        self.refresh_device_list()
-        
+
     def log(self, message):
-        """添加日志信息"""
-        self.log_text.config(state=tk.NORMAL)
-        self.log_text.insert(tk.END, f"{time.strftime('%H:%M:%S')} - {message}\n")
-        self.log_text.see(tk.END)
-        self.log_text.config(state=tk.DISABLED)
-        
-    def update_status(self, status):
-        """更新状态条"""
-        self.status_var.set(status)
-    
+        timestamp = time.strftime("%H:%M:%S")
+        line = f"[{timestamp}] {message}"
+
+        def _insert():
+            self.log_text.config(state=tk.NORMAL)
+            self.log_text.insert(tk.END, line + "\n")
+            self.log_text.see(tk.END)
+            self.log_text.config(state=tk.DISABLED)
+
+        if threading.current_thread() is threading.main_thread():
+            _insert()
+        else:
+            self.root.after(10, _insert)
+
+    def update_status(self, text):
+        self.status_var.set(text)
+
     def refresh_device_list(self):
-        """刷新已连接的ADB设备列表"""
-        self.log("正在刷新设备列表...")
+        self.log("正在刷新 ADB 设备列表...")
         self.update_status("正在刷新设备列表...")
-        
-        try:
-            # 执行ADB设备命令
-            result = subprocess.run(
-                ["adb", "devices"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            # 解析输出，提取设备列表
-            devices = []
-            lines = result.stdout.strip().split('\n')[1:]  # 跳过第一行标题
-            
-            for line in lines:
-                if line.strip() and 'device' in line:
-                    device = line.split()[0].strip()
-                    devices.append(device)
-            
-            # 更新下拉框
-            self.device_combobox['values'] = devices
-            if devices:
-                self.device_combobox.current(0)  # 选中第一个设备
-                self.log(f"找到 {len(devices)} 个已连接设备")
-                self.update_status(f"找到 {len(devices)} 个设备")
-            else:
-                self.log("未找到已连接的设备")
-                self.update_status("未找到设备")
-        except Exception as e:
-            self.log(f"刷新设备列表时出错: {str(e)}")
-            self.update_status("刷新设备列表出错")
-    
+
+        def _refresh():
+            try:
+                result = subprocess.run(
+                    ["adb", "devices"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                devices = []
+                for line in result.stdout.strip().splitlines()[1:]:
+                    if line.strip() and "\tdevice" in line:
+                        dev = line.split("\t")[0].strip()
+                        devices.append(dev)
+
+                self.root.after(0, lambda: self._update_device_list_ui(devices))
+            except Exception as e:
+                self.log(f"刷新设备失败: {e}")
+                self.root.after(0, lambda: self.update_status("刷新失败"))
+
+        threading.Thread(target=_refresh, daemon=True).start()
+
+    def _update_device_list_ui(self, devices):
+        self.device_combobox["values"] = devices
+        if devices:
+            if not self.device_var.get() or self.device_var.get() not in devices:
+                self.device_var.set(devices[0])
+            self.log(f"找到 {len(devices)} 个可用设备")
+            self.update_status(f"已连接 {len(devices)} 个设备")
+        else:
+            self.log("未检测到任何 ADB 设备")
+            self.update_status("无可用设备")
+
     def connect_specified_device(self):
-        """连接用户指定的设备地址"""
         device = self.device_var.get().strip()
         if not device:
-            # 如果下拉框中没有设备，提示用户输入
-            device = simpledialog.askstring("输入设备地址", "请输入设备地址 (例如: 127.0.0.1:16384)")
+            device = simpledialog.askstring(
+                "手动连接设备",
+                "请输入 ADB 设备地址（如 127.0.0.1:5555）:",
+                parent=self.root
+            )
             if not device:
                 return
-                
+            self.device_var.set(device)
+
         self.log(f"尝试连接设备: {device}")
-        self.update_status("正在连接设备...")
-        
-        try:
-            # 执行ADB连接命令
-            result = subprocess.run(
-                ["adb", "connect", device],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            if "connected to" in result.stdout or "already connected" in result.stdout:
-                self.log(f"设备连接成功: {device}")
-                self.update_status("设备已连接")
-                # 刷新设备列表
-                self.refresh_device_list()
-            else:
-                self.log(f"设备连接失败: {result.stdout.strip() or result.stderr.strip()}")
-                self.update_status("连接失败")
-        except Exception as e:
-            self.log(f"连接设备时出错: {str(e)}")
-            self.update_status("连接出错")
-    
+        self.update_status(f"正在连接 {device}...")
+
+        def _connect():
+            try:
+                result = subprocess.run(
+                    ["adb", "connect", device],
+                    capture_output=True,
+                    text=True,
+                    timeout=15
+                )
+                output = (result.stdout + result.stderr).strip()
+                if "connected to" in output or "already connected" in output:
+                    self.log(f"成功连接设备: {device}")
+                    self.root.after(0, self.refresh_device_list)
+                else:
+                    self.log(f"连接失败: {output}")
+            except Exception as e:
+                self.log(f"连接异常: {e}")
+
+        threading.Thread(target=_connect, daemon=True).start()
+
     def start_script(self):
-        """启动选中的脚本"""
         if self.running:
-            messagebox.showinfo("提示", "脚本已在运行中")
+            messagebox.showinfo("提示", "脚本已在运行中，请先停止！", parent=self.root)
             return
-            
-        script_id = self.script_var.get()
+
         device = self.device_var.get().strip()
-        threshold = self.threshold_entry.get().strip()
-        
-        # 验证输入
         if not device:
-            messagebox.showerror("错误", "请选择或连接设备")
+            messagebox.showerror("错误", "请先选择或连接一个设备！", parent=self.root)
             return
-            
+
         try:
-            float(threshold)
+            threshold = float(self.threshold_var.get())
+            if not (0.0 <= threshold <= 1.0):
+                raise ValueError
         except ValueError:
-            messagebox.showerror("错误", "请输入有效的匹配阈值")
+            messagebox.showerror("参数错误", "匹配阈值必须是 0.0 ~ 1.0 之间的数字！", parent=self.root)
             return
-            
-        # 确定要运行的脚本
-        script_file = "jingong.py" if script_id == 1 else "naihao.py"
-        
-        # 检查脚本文件是否存在
-        if not os.path.exists(script_file):
-            messagebox.showerror("错误", f"未找到脚本文件: {script_file}")
+
+        try:
+            loop_count = int(self.loop_count_var.get())
+            if loop_count < 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("参数错误", "循环次数必须是非负整数！", parent=self.root)
             return
-            
-        self.log(f"开始运行{'进攻' if script_id == 1 else '匹配'}脚本...")
-        self.log(f"设备: {device}, 阈值: {threshold}")
-        
-        # 更新UI状态
+
+        script_id = self.script_var.get()
+        selected_script = next((s for s in self.SCRIPTS if s["id"] == script_id), None)
+        if not selected_script:
+            messagebox.showerror("错误", "无效的脚本选择！", parent=self.root)
+            return
+
+        script_file = selected_script["file"]
+        script_name = selected_script["name"]
+
+        self.log(f"即将启动：{script_name}")
+        self.log(f"设备: {device}")
+        self.log(f"阈值: {threshold}")
+        self.log(f"循环: {'无限' if loop_count == 0 else loop_count} 次")
+
         self.running = True
+        self.current_script_id = script_id
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
-        self.update_status("脚本运行中...")
-        
-        # 在新线程中运行脚本，避免UI卡死
+        self.update_status(f"{script_name} 运行中...")
+
         threading.Thread(
             target=self.run_script,
-            args=(script_file, device, threshold),
+            args=(script_file, device, threshold, loop_count),
             daemon=True
         ).start()
-    
-    def run_script(self, script_file, device, threshold):
-        """运行脚本的实际方法"""
+
+    def run_script(self, script_file, device, threshold, loop_count):
         try:
-            # 设置环境变量，传递设备和阈值参数
             env = os.environ.copy()
             env["COC_DEVICE"] = device
-            env["COC_THRESHOLD"] = threshold
-            
-            # 启动脚本进程
+            env["COC_THRESHOLD"] = str(threshold)
+            env["COC_LOOP_COUNT"] = str(loop_count)
+
+            self.log(f"启动进程: {sys.executable} {script_file}")
+
             self.process = subprocess.Popen(
                 [sys.executable, script_file],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                env=env
+                env=env,
+                bufsize=1,
+                universal_newlines=True
             )
-            
-            # 实时读取输出并显示到日志
-            for line in self.process.stdout:
+
+            for line in iter(self.process.stdout.readline, ''):
                 if not self.running:
                     break
-                self.log(line.strip())
-                
-            # 等待进程结束
+                clean_line = re.sub(r'\x1b$$[;?0-9]*[a-zA-Z]', '', line).strip()
+                if clean_line:
+                    self.log(f"[子进程] {clean_line}")
+
             self.process.wait()
-            
-            if self.running:  # 如果不是被手动停止的
-                self.log(f"脚本运行结束，返回代码: {self.process.returncode}")
-                self.update_status("脚本已结束")
-                
+
+            if self.running:
+                code = self.process.returncode
+                status = "正常结束" if code == 0 else f"异常退出（返回码: {code}）"
+                self.log(f"脚本 {status}")
+
         except Exception as e:
-            self.log(f"脚本运行出错: {str(e)}")
-            self.update_status("运行出错")
-            
+            self.log(f"脚本运行崩溃: {e}")
         finally:
-            # 重置状态
-            self.running = False
-            self.process = None
-            self.root.after(0, lambda: self.start_btn.config(state=tk.NORMAL))
-            self.root.after(0, lambda: self.stop_btn.config(state=tk.DISABLED))
-    
-    def stop_script(self):
-        """停止正在运行的脚本"""
-        if not self.running or not self.process:
-            return
-            
-        self.log("正在停止脚本...")
-        self.update_status("正在停止...")
-        
-        try:
-            # 终止进程
-            self.process.terminate()
-            # 等待进程结束
-            self.process.wait(timeout=5)
-            self.log("脚本已停止")
-            self.update_status("已停止")
-        except subprocess.TimeoutExpired:
-            # 强制杀死进程
-            self.process.kill()
-            self.log("脚本已强制停止")
-            self.update_status("已强制停止")
-        except Exception as e:
-            self.log(f"停止脚本时出错: {str(e)}")
-            self.update_status("停止出错")
-            
-        # 重置状态
+            self._cleanup_after_run()
+
+    def _cleanup_after_run(self):
         self.running = False
         self.process = None
-        self.start_btn.config(state=tk.NORMAL)
-        self.stop_btn.config(state=tk.DISABLED)
+        self.current_script_id = None
+
+        def _reset_ui():
+            self.start_btn.config(state=tk.NORMAL)
+            self.stop_btn.config(state=tk.DISABLED)
+            script_name = {1: "进攻", 2: "奶号", 3: "欢迎"}.get(self.current_script_id, "脚本")
+            self.update_status(f"{script_name}已结束")
+
+        self.root.after(0, _reset_ui)
+
+    def stop_script(self):
+        if not self.running or not self.process:
+            return
+
+        self.log("正在请求停止脚本...")
+        self.update_status("正在终止进程...")
+
+        try:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=3)
+                self.log("进程已正常终止")
+            except subprocess.TimeoutExpired:
+                self.log("进程未响应，强制终止...")
+                self.process.kill()
+                self.process.wait(timeout=2)
+                self.log("进程已强制终止")
+        except Exception as e:
+            self.log(f"终止失败: {e}")
+
+        self._cleanup_after_run()
+
+    def on_closing(self):
+        if self.running:
+            if messagebox.askokcancel("退出确认", "脚本正在运行中，确定要退出吗？\n（进程将被强制终止）", parent=self.root):
+                self.stop_script()
+                time.sleep(0.3)
+                self.root.destroy()
+        else:
+            self.root.destroy()
+
 
 if __name__ == "__main__":
+    # Windows 高 DPI 适配（可选）
+    if sys.platform == "win32":
+        try:
+            from ctypes import windll
+            windll.shcore.SetProcessDpiAwareness(1)
+        except:
+            pass
+
     root = tk.Tk()
-    app = CocAutoClickGUI(root)
+    app = CocAutoLauncher(root)
     root.mainloop()
